@@ -1,0 +1,105 @@
+CRITICAL DEVICE IDENTIFICATION
+The target headphones are the Sennheiser HD 4.50 BTNC, specifically. Do not confuse them with the Sennheiser HD 450BT, HD 4.40 BT, or any other model. Verify that all documentation, protocol research, hardware capabilities, and implementation decisions apply to the exact HD 4.50 BTNC model. The application must identify itself as an unofficial HD 4.50 BTNC companion. Never substitute findings from a different model without independently verifying compatibility.
+
+ROLE AND MISSION
+Act as a senior Android engineer, audio DSP specialist, Bluetooth protocol researcher, and exceptional mobile product designer. Build a complete, polished, installable Android companion app for the Sennheiser HD 4.50 BTNC. Deliver working source code and an APK if possible, or an automated hosted-build route if local compilation is blocked. Do not merely plan, describe, or create mockups.
+
+Operate autonomously. Inspect the workspace and toolchain first, make sensible decisions, implement, test, and package. Keep explanations brief and spend effort on the deliverable.
+
+PRODUCT VISION
+Create an unofficial, community-built headphone utility that feels like a premium audio product: technically honest, minimalist, responsive, and visually distinctive. It should feel purpose-built for these headphones rather than a generic Bluetooth settings app.
+
+TECH STACK
+Native Android; Kotlin; Jetpack Compose; Material 3; compatible stable dependencies. Choose versions after inspecting the available toolchain. Use a maintainable architecture without overengineering. Minimize dependencies. Target modern Android while handling applicable older versions and permissions.
+
+VISUAL DESIGN — NON-NEGOTIABLE
+Create the finished UI in the first implementation, not as a later optional polish pass.
+
+Design language:
+- Premium, dark, studio-audio aesthetic inspired by high-end audio equipment and precise sound engineering.
+- Near-black/charcoal backgrounds, layered graphite surfaces, restrained cool-white text, and one subtle electric-lime or icy-blue accent. Use the accent selectively.
+- Strong typographic hierarchy, generous spacing, crisp alignment, rounded but not excessively pill-shaped cards, clear borders, restrained shadows, and purposeful micro-animations.
+- Large readable values, refined frequency sliders, clear disabled/loading/error states, accessible contrast and touch targets.
+- No generic dashboard templates, excessive gradients, neon overload, emoji controls, random decorative charts, stock imagery, or web pages wrapped in an APK.
+- Use native Compose components and custom-drawn visualizations where appropriate. UI must adapt to phone sizes and system insets, support light/dark system settings sensibly, and remain smooth.
+- Create a consistent design system: colors, typography, spacing, shapes, component states, and reusable components. No inconsistent one-off styling.
+
+INFORMATION ARCHITECTURE
+Build a compact app with three clear destinations or equivalent sections:
+1. SOUND — primary EQ workspace.
+2. HEADPHONES — connection, device information, ANC status/control and troubleshooting.
+3. SETTINGS — profiles, playback options, app preferences and about/open-source attribution.
+
+PRIMARY SCREEN: SOUND
+- Header identifying the HD 4.50 BTNC and connection state.
+- An elegant EQ curve visualization that updates when band gains change.
+- A row of selectable presets: Neutral, Bass, Vocal, Clarity, and Custom.
+- A real multi-band EQ with individually adjustable gain sliders and clearly displayed dB values. Use appropriate frequency labels and sensible gain limits.
+- Enable/bypass toggle, reset button, preset switching, and persistent custom profile saving/renaming/deletion.
+- Clear active-preset feedback and smooth transitions.
+- Prevent clipping where feasible using preamp/headroom or suitable DSP handling.
+- All controls must actually work. Do not fake audio processing by merely moving the curve.
+
+HEADPHONES SCREEN
+- Clear Bluetooth connection/disconnection state.
+- Battery percentage only when reliably exposed; otherwise display unavailable.
+- ANC/NoiseGard control with truthful state reporting.
+- If software ANC control cannot be verified, show a clearly marked unavailable/experimental state, explain the limitation briefly, and display the physical shortcut: hold Volume+ and Volume− together.
+- Include practical troubleshooting for pairing, disconnects and unsupported capabilities.
+- Never display a simulated successful ANC toggle.
+
+SETTINGS SCREEN
+- Manage saved EQ profiles and sensible defaults.
+- Provide app version, concise privacy statement, open-source acknowledgements, and an explicit unofficial-community-project disclaimer.
+- Keep settings minimal and useful. No unnecessary analytics, accounts, ads, telemetry or data collection.
+
+AUDIO ENGINE — REAL FUNCTIONALITY
+Implement a real DSP path, not a visual-only EQ. Assess the practical limits of Android's audio APIs. Standard Equalizer effects generally attach to an audio session and cannot reliably alter every other app's output on ordinary non-rooted Android.
+- Prefer a reliable supported implementation.
+- If reliable system-wide EQ is unavailable, implement an in-app audio player with real playback and an EQ attached to its playback session.
+- Make the supported playback scope obvious in the UI and README.
+- Use suitable filter implementations, stable parameter handling, smoothing to avoid audible clicks where feasible, sensible gain limits, and correct lifecycle/resource cleanup.
+- Keep DSP logic testable and separate from UI.
+- Never claim system-wide processing unless genuinely implemented and verified.
+
+ANC AND BLUETOOTH RESEARCH
+Research official Sennheiser documentation, credible open-source projects, and reliable protocol evidence for the exact HD 4.50 BTNC. The headset's physical NoiseGard toggle uses Volume+ and Volume− together.
+Investigate whether a documented or experimentally verified Bluetooth command can control ANC from Android. Distinguish Bluetooth Classic AVRCP/HFP controls from BLE GATT; do not assume the headphones expose an ANC characteristic or a public control API.
+Implement app-controlled ANC only if a supported or experimentally verified route exists. Use legitimate Android APIs and accurately report verification status. Never invent UUIDs, commands, hardware capabilities, battery values or state. If control is unverified, provide an honest unavailable state and physical shortcut instead of pretending the feature works.
+Do not let speculative reverse engineering prevent delivery of the working EQ and app.
+
+BLUETOOTH AND PERMISSIONS
+Handle Android-version-specific Bluetooth permissions and lifecycle correctly. Request only required permissions at the point of use. Gracefully handle denied permissions, missing device information, disconnections, unsupported features, and failures. Avoid continuous scanning and unnecessary background services.
+
+BUILD AND DELIVERY — CRITICAL
+The environment may block Android SDK downloads. Do not repeatedly attempt downloads after confirming they are blocked.
+1. Check installed SDK/build tools and build if available.
+2. Create a coherent project with all necessary source/configuration files and a usable Gradle wrapper where feasible.
+3. If local compilation is blocked, create a reproducible GitHub Actions workflow using a suitable Android-capable hosted runner to build the debug APK as an artifact. Pin compatible tool/action versions. Document exactly how to retrieve the artifact.
+4. Never assume GitHub credentials or repository permissions. Do not create or publish a repository, push code, or expose secrets without authorization. If remote publishing is unavailable, prepare the project as a complete ZIP-ready directory.
+5. Include a concise README with setup, build, install, supported features, limitations, permissions and troubleshooting.
+6. Include BUILD_STATUS.md to preserve completed work, remaining tasks, verified results, and exact next steps if the session is interrupted.
+
+TESTING AND QUALITY
+Add tests for EQ/filter math, preset data, persistence and other testable logic. Run available tests and builds. Fix actual compilation/test failures where tooling permits. Verify all UI controls, empty/error states and navigation. Do not claim hardware testing or successful ANC control without real evidence.
+Avoid placeholder screens, TODOs masquerading as finished features, fake connection data, dead buttons, unnecessary complexity, and blind rewrites.
+
+EXECUTION ORDER
+1. Inspect workspace/toolchain and identify genuine constraints.
+2. Implement the full design system and complete screen layouts alongside functional app logic.
+3. Implement the real EQ audio path and persistence.
+4. Research ANC, implementing only what evidence supports.
+5. Add tests, run available builds, fix errors, and package the result.
+6. Produce the ZIP/APK or hosted-build workflow and a concise final report.
+
+TOKEN AND CONTINUITY DISCIPLINE
+- Avoid lengthy plans, repeated research, unnecessary narration and restating requirements.
+- Do not spend the budget repeatedly retrying blocked SDK downloads.
+- Save progress continuously. Reuse working code and avoid recreating files blindly.
+- If nearing an execution or usage limit, prioritize a coherent project, working EQ, build automation, and updated BUILD_STATUS.md.
+- Prefer a smaller verified implementation over ambitious nonfunctional features.
+
+ACCEPTANCE CRITERIA
+A complete, visually polished native Android app; real EQ audio processing in the documented supported playback path; persistent working presets; truthful Bluetooth/ANC behavior; tested logic; coherent build configuration; and an actual APK or reproducible hosted-build route. A collection of source files without a usable delivery path is not sufficient.
+
+Begin by inspecting the workspace and toolchain. Then execute the implementation. Make routine decisions autonomously and finish as much of the deliverable as possible in this run.
