@@ -69,7 +69,6 @@ The APK lands in `app/build/outputs/apk/debug/`. The included GitHub Actions wor
 
 Kotlin, Jetpack Compose (Material 3), AndroidX Media3, `AudioRecord`/`AudioTrack` for the ambient path, Storage Access Framework for folders. minSdk 26, target 35. Package: `dev.hd450btnc.companion`.
 
-Design notes live in [docs/](docs/): [system EQ research](docs/SYSTEM_EQ_RESEARCH.md), [ambient mode](docs/AMBIENT.md), [NoiseGard research](docs/ANC_RESEARCH.md).
 
 ## License
 
