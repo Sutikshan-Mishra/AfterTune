@@ -40,6 +40,9 @@ import dev.hd450btnc.companion.eq.EqState
 import dev.hd450btnc.companion.eq.SavedProfile
 import dev.hd450btnc.companion.settings.AppSettings
 import dev.hd450btnc.companion.settings.ThemeMode
+import dev.hd450btnc.companion.bt.HeadsetState
+import dev.hd450btnc.companion.ui.headphones.HeadphonesActions
+import dev.hd450btnc.companion.ui.headphones.HeadphonesSection
 import dev.hd450btnc.companion.ui.components.ButtonStyle
 import dev.hd450btnc.companion.ui.components.ConfirmDialog
 import dev.hd450btnc.companion.ui.components.GlyphKind
@@ -70,7 +73,15 @@ data class SettingsActions(
 )
 
 @Composable
-fun SettingsScreen(eq: EqState, settings: AppSettings, actions: SettingsActions, modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    eq: EqState,
+    settings: AppSettings,
+    actions: SettingsActions,
+    headset: HeadsetState,
+    permissionBlocked: Boolean,
+    headphones: HeadphonesActions,
+    modifier: Modifier = Modifier,
+) {
     val c = Studio.colors
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
@@ -83,7 +94,10 @@ fun SettingsScreen(eq: EqState, settings: AppSettings, actions: SettingsActions,
             .padding(horizontal = Space.screen)
             .padding(bottom = Space.xl + LocalContentBottomInset.current),
     ) {
-        ScreenHeader(overline = "Settings", title = "Profiles & app")
+        ScreenHeader(overline = "Settings", title = "Headphones & app")
+
+        SectionTitle("Headphones", Modifier.padding(bottom = Space.s))
+        HeadphonesSection(headset, permissionBlocked, headphones)
 
         Section("Saved profiles")
         Column {

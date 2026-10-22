@@ -22,7 +22,7 @@ import kotlin.math.sin
 
 enum class GlyphKind {
     CURVE, HEADPHONES, SLIDERS, PLAY, PAUSE, NEXT, PREVIOUS, PLUS, CLOSE, CHECK, RESET,
-    INFO, WAVE, EDIT, TRASH, BLUETOOTH, CHEVRON_DOWN, WARNING, SAVE, MIC, MUTE, SHUFFLE,
+    INFO, WAVE, EDIT, TRASH, BLUETOOTH, CHEVRON_DOWN, WARNING, SAVE, MIC, MUTE, SHUFFLE, REPEAT, HEART, HEART_FILLED,
 }
 
 /**
@@ -83,6 +83,22 @@ private fun DrawScope.drawGlyph(kind: GlyphKind, color: Color) {
             path { m(13.2f, 10f); c(14f, 8.5f, 15f, 7f, 17f, 7f); l(20f, 7f) }
             path { m(17.5f, 4.5f); l(20.5f, 7f); l(17.5f, 9.5f) }
             path { m(17.5f, 14.5f); l(20.5f, 17f); l(17.5f, 19.5f) }
+        }
+        GlyphKind.REPEAT -> {
+            path { m(4f, 12f); l(4f, 10f); c(4f, 8.5f, 5f, 7f, 7f, 7f); l(18f, 7f) }
+            path { m(15.5f, 4.5f); l(18.5f, 7f); l(15.5f, 9.5f) }
+            path { m(20f, 12f); l(20f, 14f); c(20f, 15.5f, 19f, 17f, 17f, 17f); l(6f, 17f) }
+            path { m(8.5f, 14.5f); l(5.5f, 17f); l(8.5f, 19.5f) }
+        }
+        GlyphKind.HEART, GlyphKind.HEART_FILLED -> path(fill = kind == GlyphKind.HEART_FILLED) {
+            m(12f, 20.5f)
+            c(5f, 15.5f, 2.5f, 12f, 2.5f, 8.5f)
+            c(2.5f, 5.5f, 4.8f, 3.5f, 7.3f, 3.5f)
+            c(9.3f, 3.5f, 11f, 4.6f, 12f, 6.4f)
+            c(13f, 4.6f, 14.7f, 3.5f, 16.7f, 3.5f)
+            c(19.2f, 3.5f, 21.5f, 5.5f, 21.5f, 8.5f)
+            c(21.5f, 12f, 19f, 15.5f, 12f, 20.5f)
+            close()
         }
         GlyphKind.PLUS -> { line(12f, 5f, 12f, 19f); line(5f, 12f, 19f, 12f) }
         GlyphKind.CLOSE -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }

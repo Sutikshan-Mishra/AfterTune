@@ -62,7 +62,7 @@ import dev.hd450btnc.companion.AppController
 import dev.hd450btnc.companion.ui.components.Glyph
 import dev.hd450btnc.companion.ui.components.GlyphKind
 import dev.hd450btnc.companion.ui.headphones.HeadphonesActions
-import dev.hd450btnc.companion.ui.headphones.HeadphonesScreen
+import dev.hd450btnc.companion.ui.player.PlayerScreen
 import dev.hd450btnc.companion.ui.player.MiniPlayer
 import dev.hd450btnc.companion.ui.player.PlayerActions
 import dev.hd450btnc.companion.ui.settings.SettingsActions
@@ -94,8 +94,8 @@ import dev.hd450btnc.companion.ui.theme.StudioType
 
 enum class Destination(val label: String, val glyph: GlyphKind, val icon: NavIconKind) {
     SOUND("Sound", GlyphKind.CURVE, NavIconKind.SOUND),
+    PLAYER("Player", GlyphKind.PLAY, NavIconKind.PLAYER),
     AMBIENT("Ambient", GlyphKind.MIC, NavIconKind.AMBIENT),
-    HEADPHONES("Headphones", GlyphKind.HEADPHONES, NavIconKind.HEADPHONES),
     SETTINGS("Settings", GlyphKind.SLIDERS, NavIconKind.SETTINGS),
 }
 
@@ -109,6 +109,9 @@ fun AppRoot(controller: AppController) {
     val player by controller.audio.state.collectAsStateWithLifecycle()
     val shown by controller.shownArtwork.collectAsStateWithLifecycle()
     val recommendations by controller.recommendations.collectAsStateWithLifecycle()
+    val library by controller.library.tracks.collectAsStateWithLifecycle()
+    val currentUri = player.current?.uri
+    val currentTrack = remember(library, currentUri) { library.firstOrNull { it.uri == currentUri } }
     val headset by controller.headset.state.collectAsStateWithLifecycle()
     val systemEq by controller.systemEq.state.collectAsStateWithLifecycle()
     val panelRequest by controller.panelRequest.collectAsStateWithLifecycle()
@@ -245,6 +248,19 @@ fun AppRoot(controller: AppController) {
         externalPrevious = controller.externalArtwork::previous,
     )
 
+    val headphonesActions = HeadphonesActions(
+        requestPermission = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        },
+        openAppSettings = {
+            launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
+        },
+        openBluetoothSettings = { launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+        refresh = controller.headset::refresh,
+    )
+
     // Screen content is recorded as the backdrop of the floating glass mini player and scrolls beneath it.
     val backdrop = rememberGlassBackdrop()
     var overlayHeightPx by remember { mutableIntStateOf(0) }
@@ -295,8 +311,23 @@ fun AppRoot(controller: AppController) {
                             reset = controller::resetCurve,
                             setEnabled = controller::setEnabled,
                             saveProfile = controller::saveProfile,
-                            openHeadphones = { dest = Destination.HEADPHONES },
+                            openHeadphones = { dest = Destination.SETTINGS },
                         ),
+                    )
+                    Destination.PLAYER -> PlayerScreen(
+                        state = player,
+                        external = shown.track,
+                        art = shown.state,
+                        levels = controller.audio.levels,
+                        artPlaying = player.isPlaying && !shown.external,
+                        ambientMotion = shown.track?.playing == true,
+                        artist = currentTrack?.artist?.takeIf { it.isNotBlank() },
+                        liked = currentTrack?.liked == true,
+                        repeat = settings.repeatQueue,
+                        recommendations = recommendations,
+                        actions = playerActions,
+                        onToggleLike = { currentUri?.let(controller.library::toggleLike) },
+                        onToggleRepeat = { controller.updateSettings { it.copy(repeatQueue = !it.repeatQueue) } },
                     )
                     Destination.AMBIENT -> AmbientScreen(
                         status = ambient,
@@ -324,25 +355,12 @@ fun AppRoot(controller: AppController) {
                             },
                         ),
                     )
-                    Destination.HEADPHONES -> HeadphonesScreen(
-                        state = headset,
-                        permissionBlocked = permissionBlocked,
-                        actions = HeadphonesActions(
-                            requestPermission = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
-                                }
-                            },
-                            openAppSettings = {
-                                launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)))
-                            },
-                            openBluetoothSettings = { launch(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
-                            refresh = controller.headset::refresh,
-                        ),
-                    )
                     Destination.SETTINGS -> SettingsScreen(
                         eq = eq,
                         settings = settings,
+                        headset = headset,
+                        permissionBlocked = permissionBlocked,
+                        headphones = headphonesActions,
                         actions = SettingsActions(
                             selectProfile = controller::selectPreset,
                             renameProfile = controller::renameProfile,
@@ -357,14 +375,16 @@ fun AppRoot(controller: AppController) {
             }
         }
         Column(Modifier.align(Alignment.BottomCenter).onSizeChanged { overlayHeightPx = it.height }) {
-            MiniPlayer(
-                player, eq.enabled, playerActions, backdrop = backdrop,
-                art = shown.state, levels = controller.audio.levels, artPlaying = player.isPlaying && !shown.external,
-                external = shown.track,
-                ambientMotion = shown.track?.playing == true,
-                recommendations = recommendations,
-            )
-            Spacer(Modifier.height(Space.s))
+            if (dest != Destination.PLAYER) {
+                MiniPlayer(
+                    player, eq.enabled, playerActions, backdrop = backdrop,
+                    art = shown.state, levels = controller.audio.levels, artPlaying = player.isPlaying && !shown.external,
+                    external = shown.track,
+                    ambientMotion = shown.track?.playing == true,
+                    onOpen = { dest = Destination.PLAYER },
+                )
+                Spacer(Modifier.height(Space.s))
+            }
             BottomBar(dest) { dest = it }
         }
     }

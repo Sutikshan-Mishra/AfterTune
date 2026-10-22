@@ -30,7 +30,7 @@ import dev.hd450btnc.companion.ui.theme.Studio
 /**
  * Headphone connection as a single glanceable object, like a device complication: a round headphone
  * button whose ring is the battery level (when the headset reports it), with a presence dot in the corner.
- * No text; the state is also announced to screen readers. Tapping opens the Headphones page.
+ * No text; the state is also announced to screen readers. Tapping opens the Settings page, where the headphone details are.
  */
 @Composable
 fun DeviceBadge(

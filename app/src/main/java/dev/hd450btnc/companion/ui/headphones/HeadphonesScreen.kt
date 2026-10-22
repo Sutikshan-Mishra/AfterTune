@@ -70,21 +70,15 @@ data class HeadphonesActions(
     val refresh: () -> Unit,
 )
 
+/** Connection status, NoiseGard guidance and troubleshooting. Lives at the top of the Settings page. */
 @Composable
-fun HeadphonesScreen(
+fun HeadphonesSection(
     state: HeadsetState,
     permissionBlocked: Boolean,
     actions: HeadphonesActions,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = Space.screen)
-            .padding(bottom = Space.xl + LocalContentBottomInset.current),
-    ) {
-        ScreenHeader(overline = "Headphones", title = "Headphones")
+    Column(modifier.fillMaxWidth()) {
         ConnectionCard(state, permissionBlocked, actions)
         Spacer(Modifier.height(Space.xl))
         NoiseGardCard()

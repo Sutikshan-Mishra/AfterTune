@@ -27,6 +27,7 @@ data class LibraryTrack(
     val skips: Int = 0,
     val lastPlayedAt: Long = 0L,
     val tagged: Boolean = false,
+    val liked: Boolean = false,
 )
 
 enum class ListenOutcome { IGNORED, SKIP, PARTIAL, COMPLETE }
@@ -55,6 +56,7 @@ data class Recommendation(val uri: String, val title: String, val reason: String
 object Recommender {
     private const val HALF_LIFE_DAYS = 30.0
     private const val DAY_MS = 86_400_000.0
+    private const val LIKE_WEIGHT = 3.0
 
     /** How much a track's own history says the user likes it (can be negative for repeated skips). */
     fun weight(t: LibraryTrack, now: Long): Double {
@@ -76,7 +78,8 @@ object Recommender {
         val albums = HashMap<String, Double>()
         val genres = HashMap<String, Double>()
         for (t in library) {
-            val w = weight(t, now)
+            // A like is a strong, deliberate signal: it counts even when the track itself has little history.
+            val w = weight(t, now).coerceAtLeast(0.0) + if (t.liked) LIKE_WEIGHT else 0.0
             if (w <= 0.0) continue
             norm(t.artist).takeIf { it.isNotEmpty() }?.let { artists.merge(it, w, { a, b -> a + b }) }
             norm(t.album).takeIf { it.isNotEmpty() }?.let { albums.merge(it, w, { a, b -> a + b }) }
@@ -129,12 +132,14 @@ object Recommender {
             val genre = share(taste.genres, norm(t.genre))
             val own = (weight(t, now) / topOwn).coerceIn(-1.0, 1.0)
             var score = 0.45 * artist + 0.20 * album + 0.15 * genre + 0.10 * own
+            if (t.liked) score += 0.25 // liked tracks always have a place in the list
             if (score < 0.08) continue // nothing about it resembles what you listen to
             if (t.plays == 0) score += 0.15 // unheard tracks that match are worth surfacing
             if (t.skips >= 2 && t.completions == 0) score -= 0.5
             if (t.lastPlayedAt > 0L && now - t.lastPlayedAt < 30 * 60_000L) score -= 0.3 // just heard it
             if (score <= 0.1) continue
             val reason = when {
+                t.liked -> "You liked this"
                 artist >= 0.3 && artist >= album && artist >= genre -> if (t.artist.isNotBlank()) "You play ${t.artist}" else "Matches artists you play"
                 album >= 0.3 && album >= genre -> "From an album you play"
                 genre >= 0.3 -> "Like the ${t.genre} you play"
@@ -156,7 +161,7 @@ object LibraryCodec {
     fun encode(tracks: List<LibraryTrack>): String = tracks.joinToString("\n") {
         listOf(
             clean(it.uri), clean(it.title), clean(it.artist), clean(it.album), clean(it.genre),
-            it.plays, it.completions, it.skips, it.lastPlayedAt, if (it.tagged) 1 else 0,
+            it.plays, it.completions, it.skips, it.lastPlayedAt, if (it.tagged) 1 else 0, if (it.liked) 1 else 0,
         ).joinToString("\t")
     }
 
@@ -164,11 +169,11 @@ object LibraryCodec {
         if (raw.isNullOrBlank()) return emptyList()
         return raw.lineSequence().mapNotNull { line ->
             val p = line.split('\t')
-            if (p.size != 10 || p[0].isBlank()) return@mapNotNull null
+            if ((p.size != 10 && p.size != 11) || p[0].isBlank()) return@mapNotNull null
             LibraryTrack(
                 uri = p[0], title = p[1], artist = p[2], album = p[3], genre = p[4],
                 plays = p[5].toIntOrNull() ?: 0, completions = p[6].toIntOrNull() ?: 0, skips = p[7].toIntOrNull() ?: 0,
-                lastPlayedAt = p[8].toLongOrNull() ?: 0L, tagged = p[9] == "1",
+                lastPlayedAt = p[8].toLongOrNull() ?: 0L, tagged = p[9] == "1", liked = p.getOrNull(10) == "1",
             )
         }.toList()
     }
@@ -226,6 +231,8 @@ class Library(
             )
         }
     }
+
+    fun toggleLike(uri: String) = update(uri) { it.copy(liked = !it.liked) }
 
     fun recordExternal(artist: String) {
         val key = Recommender.norm(artist)

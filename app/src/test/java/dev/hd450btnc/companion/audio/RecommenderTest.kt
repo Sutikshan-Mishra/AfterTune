@@ -123,13 +123,35 @@ class RecommenderTest {
     @Test
     fun codecRoundTrips() {
         val lib = listOf(
-            LibraryTrack("content://a/b", "Title", "Art", "Alb", "Rock", 3, 2, 1, 12345L, true),
+            LibraryTrack("content://a/b", "Title", "Art", "Alb", "Rock", 3, 2, 1, 12345L, true, liked = true),
             LibraryTrack("content://c", "Tab\there", plays = 0),
         )
         val back = LibraryCodec.decode(LibraryCodec.encode(lib))
         assertEquals(lib[0], back[0])
         assertEquals("Tab here", back[1].title)
         assertEquals(mapOf("a" to 2, "b" to 7), LibraryCodec.decodeExternal(LibraryCodec.encodeExternal(mapOf("a" to 2, "b" to 7))))
+    }
+
+    @Test
+    fun likedTracksSurfaceWithTheirOwnReasonAndShapeTaste() {
+        val lib = listOf(
+            LibraryTrack("uri:l", "Liked song", artist = "X", liked = true),
+            LibraryTrack("uri:s", "Same artist", artist = "X"),
+            LibraryTrack("uri:o", "Other", artist = "Y"),
+        )
+        val ranked = Recommender.rank(lib, emptyMap(), null, now)
+        val byUri = ranked.associateBy { it.track.uri }
+        assertEquals("You liked this", byUri.getValue("uri:l").reason)
+        assertTrue("uri:s" in byUri)
+        assertTrue("uri:o" !in byUri)
+    }
+
+    @Test
+    fun codecStillReadsLinesWithoutTheLikedField() {
+        val back = LibraryCodec.decode("content://x\tT\tA\tAl\tG\t1\t1\t0\t5\t1")
+        assertEquals(1, back.size)
+        assertEquals(false, back[0].liked)
+        assertEquals(true, back[0].tagged)
     }
 
     @Test
