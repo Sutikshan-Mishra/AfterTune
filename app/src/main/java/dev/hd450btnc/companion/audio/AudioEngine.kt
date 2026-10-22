@@ -59,6 +59,7 @@ class AudioEngine(
     private val context: Context,
     private val store: KeyValueStore,
     private val scope: CoroutineScope,
+    private val library: Library,
 ) {
     private val processor = EqAudioProcessor()
 
@@ -98,11 +99,26 @@ class AudioEngine(
     val state: StateFlow<PlayerState> = _state.asStateFlow()
     private var progressJob: Job? = null
 
+    // Listening history: what is being heard, for how long, and its length (feeds the recommendations).
+    private var trackedUri: String? = null
+    private var trackedDurationMs = 0L
+    private var listenedMs = 0L
+
     init {
         player.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
                 publish()
                 updateProgressTicker()
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) return
+                flushListen(naturalEnd = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
+                startTracking(mediaItem?.mediaId)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) flushListen(naturalEnd = true)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -155,6 +171,24 @@ class AudioEngine(
         player.removeMediaItem(index)
         persistQueue()
         publish()
+    }
+
+    /** Adds one library track to the end of the queue without playing it. */
+    fun enqueue(item: QueueItem) {
+        if (queue.any { it.uri == item.uri }) return
+        append(listOf(item))
+    }
+
+    /** Plays a library track: jumps to it when it is queued, otherwise queues it and plays it. */
+    fun playTrack(item: QueueItem) {
+        val existing = queue.indexOfFirst { it.uri == item.uri }
+        if (existing >= 0) {
+            playAt(existing)
+            return
+        }
+        val startIndex = queue.size
+        append(listOf(item))
+        playAt(startIndex)
     }
 
     fun clearQueue() {
@@ -241,7 +275,22 @@ class AudioEngine(
         }
     }
 
+    private fun startTracking(uri: String?) {
+        trackedUri = uri
+        trackedDurationMs = 0L
+        listenedMs = 0L
+    }
+
+    private fun flushListen(naturalEnd: Boolean) {
+        val uri = trackedUri ?: return
+        val outcome = ListenRules.classify(listenedMs, trackedDurationMs, naturalEnd)
+        library.recordListen(uri, outcome, System.currentTimeMillis())
+        trackedUri = null
+        listenedMs = 0L
+    }
+
     private fun append(items: List<QueueItem>) {
+        library.noteAdded(items)
         queue = queue + items
         player.addMediaItems(items.map(::toMediaItem))
         persistQueue()
@@ -250,6 +299,10 @@ class AudioEngine(
 
     private fun publish() {
         val duration = player.duration
+        if (trackedUri == null && player.isPlaying) startTracking(player.currentMediaItem?.mediaId)
+        if (duration != C.TIME_UNSET && trackedUri != null && trackedUri == player.currentMediaItem?.mediaId) {
+            trackedDurationMs = duration.coerceAtLeast(0L)
+        }
         _state.value = _state.value.copy(
             queue = queue,
             currentIndex = if (player.mediaItemCount == 0) -1 else player.currentMediaItemIndex,
@@ -267,6 +320,7 @@ class AudioEngine(
             if (progressJob?.isActive == true) return
             progressJob = scope.launch {
                 while (isActive) {
+                    if (player.isPlaying) listenedMs += 250L
                     publish()
                     delay(250)
                 }
@@ -323,6 +377,7 @@ class AudioEngine(
         }.toList()
         if (items.isEmpty()) return
         queue = items
+        library.noteAdded(items)
         player.setMediaItems(items.map(::toMediaItem))
         publish()
     }

@@ -19,6 +19,10 @@ import kotlinx.coroutines.delay
 import dev.hd450btnc.companion.artwork.ArtworkState
 import dev.hd450btnc.companion.artwork.ExternalArtworkController
 import dev.hd450btnc.companion.artwork.ExternalArtworkRules
+import dev.hd450btnc.companion.artwork.ExternalTrack
+import dev.hd450btnc.companion.audio.QueueItem
+import dev.hd450btnc.companion.audio.Recommendation
+import dev.hd450btnc.companion.audio.Recommender
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -48,28 +52,49 @@ class AppController(private val app: Application) {
     private val _settings = MutableStateFlow(settingsRepo.load())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
-    val audio = AudioEngine(app, store, scope)
+    val library = dev.hd450btnc.companion.audio.Library(app, store, scope)
+    val audio = AudioEngine(app, store, scope, library)
     val headset = HeadsetMonitor(app)
     val ambient = AmbientEngine(app)
     val artwork = dev.hd450btnc.companion.artwork.ArtworkController(app, scope)
     val externalArtwork = ExternalArtworkController(app, scope)
     val systemEq = SystemEqController(app)
 
-    /** The picture to show: the in-app track's, or (when enabled) another app's. [external] = not in-app. */
-    class ShownArtwork(val state: ArtworkState, val external: Boolean)
+    /**
+     * What the UI follows: the in-app player, or another app's media session ([external]). For an external
+     * source [track] carries its title, artist and progress; [state] is its picture (or none).
+     */
+    class ShownArtwork(val state: ArtworkState, val external: Boolean, val track: ExternalTrack? = null)
 
     val shownArtwork: StateFlow<ShownArtwork> = combine(
         artwork.state,
-        audio.state.map { it.isPlaying }.distinctUntilChanged(),
+        audio.state.map { it.hasMedia to it.isPlaying }.distinctUntilChanged(),
         externalArtwork.state,
-    ) { inApp, inAppPlaying, ext ->
-        val useInApp = ExternalArtworkRules.preferInApp(
-            inAppReady = inApp is ArtworkState.Ready,
-            inAppPlaying = inAppPlaying,
-            externalReady = ext is ArtworkState.Ready,
+        externalArtwork.track,
+    ) { inApp, inAppNow, ext, track ->
+        val useExternal = ExternalArtworkRules.useExternal(
+            inAppHasMedia = inAppNow.first,
+            inAppPlaying = inAppNow.second,
+            externalHasTrack = track != null,
+            externalPlaying = track?.playing == true,
         )
-        if (useInApp) ShownArtwork(inApp, false) else ShownArtwork(ext, true)
+        if (useExternal) ShownArtwork(ext, true, track) else ShownArtwork(inApp, false)
     }.stateIn(scope, SharingStarted.Eagerly, ShownArtwork(ArtworkState.None, false))
+
+    /** Library tracks ranked by how much they resemble what has been listened to; empty until there is history. */
+    val recommendations: StateFlow<List<Recommendation>> = combine(
+        library.tracks,
+        library.external,
+        audio.state.map { it.current?.uri }.distinctUntilChanged(),
+        audio.state.map { it.queue }.distinctUntilChanged(),
+    ) { tracks, heard, currentUri, queue ->
+        val queued = queue.mapTo(HashSet()) { it.uri }
+        Recommender.rank(tracks, heard, currentUri, System.currentTimeMillis())
+            .map { Recommendation(it.track.uri, it.track.title, it.reason, it.track.uri in queued) }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    fun playRecommendation(r: Recommendation) = audio.playTrack(QueueItem(r.uri, r.title, isReference = false))
+    fun queueRecommendation(r: Recommendation) = audio.enqueue(QueueItem(r.uri, r.title, isReference = false))
 
     private var awaitingAccess = false
 
@@ -83,6 +108,7 @@ class AppController(private val app: Application) {
     private var saveJob: Job? = null
 
     init {
+        externalArtwork.onListen = { t -> library.recordExternal(t.artist) }
         scope.launch {
             audio.state
                 .map { it.current }
@@ -217,6 +243,7 @@ class AppController(private val app: Application) {
         eqRepo.clear()
         settingsRepo.clear()
         audio.clearQueue()
+        library.clear()
         _eq.value = EqState()
         _settings.value = AppSettings()
         audio.setEqParams(_eq.value.toParams())

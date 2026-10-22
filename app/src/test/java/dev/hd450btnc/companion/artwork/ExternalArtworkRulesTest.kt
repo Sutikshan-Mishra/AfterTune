@@ -28,11 +28,16 @@ class ExternalArtworkRulesTest {
     }
 
     @Test
-    fun inAppPlayerKeepsPrecedenceWhilePlaying() {
-        assertTrue(ExternalArtworkRules.preferInApp(inAppReady = true, inAppPlaying = true, externalReady = true))
-        assertFalse(ExternalArtworkRules.preferInApp(inAppReady = true, inAppPlaying = false, externalReady = true))
-        assertFalse(ExternalArtworkRules.preferInApp(inAppReady = false, inAppPlaying = false, externalReady = true))
-        assertTrue(ExternalArtworkRules.preferInApp(inAppReady = false, inAppPlaying = false, externalReady = false))
+    fun sourceSelection() {
+        // nothing external: always in-app
+        assertFalse(ExternalArtworkRules.useExternal(true, true, externalHasTrack = false, externalPlaying = false))
+        // empty in-app queue: follow the external track, even when paused
+        assertTrue(ExternalArtworkRules.useExternal(false, false, externalHasTrack = true, externalPlaying = false))
+        // in-app playing wins
+        assertFalse(ExternalArtworkRules.useExternal(true, true, externalHasTrack = true, externalPlaying = true))
+        // in-app paused: only a playing external track takes over
+        assertTrue(ExternalArtworkRules.useExternal(true, false, externalHasTrack = true, externalPlaying = true))
+        assertFalse(ExternalArtworkRules.useExternal(true, false, externalHasTrack = true, externalPlaying = false))
     }
 
     @Test

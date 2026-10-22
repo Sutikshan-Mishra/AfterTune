@@ -141,8 +141,8 @@ fun SettingsScreen(eq: EqState, settings: AppSettings, actions: SettingsActions,
             )
             StudioDivider()
             ToggleRow(
-                "Artwork from other apps",
-                null,
+                "Playback from other apps",
+                "Cover, title and progress. Needs notification access.",
                 settings.externalArtwork,
                 actions.setExternalArtwork,
             )

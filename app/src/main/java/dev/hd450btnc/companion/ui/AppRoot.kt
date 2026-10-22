@@ -108,6 +108,7 @@ fun AppRoot(controller: AppController) {
     val settings by controller.settings.collectAsStateWithLifecycle()
     val player by controller.audio.state.collectAsStateWithLifecycle()
     val shown by controller.shownArtwork.collectAsStateWithLifecycle()
+    val recommendations by controller.recommendations.collectAsStateWithLifecycle()
     val headset by controller.headset.state.collectAsStateWithLifecycle()
     val systemEq by controller.systemEq.state.collectAsStateWithLifecycle()
     val panelRequest by controller.panelRequest.collectAsStateWithLifecycle()
@@ -237,6 +238,11 @@ fun AppRoot(controller: AppController) {
         addFolder = { pickFolder.launch(null) },
         toggleShuffle = controller.audio::toggleShuffle,
         playReference = controller.audio::playReference,
+        playRecommendation = controller::playRecommendation,
+        queueRecommendation = controller::queueRecommendation,
+        externalTogglePlay = controller.externalArtwork::togglePlay,
+        externalNext = controller.externalArtwork::next,
+        externalPrevious = controller.externalArtwork::previous,
     )
 
     // Screen content is recorded as the backdrop of the floating glass mini player and scrolls beneath it.
@@ -267,6 +273,7 @@ fun AppRoot(controller: AppController) {
                         art = shown.state,
                         levels = controller.audio.levels,
                         playing = player.isPlaying && !shown.external,
+                        ambientMotion = shown.track?.playing == true,
                         eq = eq,
                         headset = headset,
                         systemEq = systemEq,
@@ -353,6 +360,9 @@ fun AppRoot(controller: AppController) {
             MiniPlayer(
                 player, eq.enabled, playerActions, backdrop = backdrop,
                 art = shown.state, levels = controller.audio.levels, artPlaying = player.isPlaying && !shown.external,
+                external = shown.track,
+                ambientMotion = shown.track?.playing == true,
+                recommendations = recommendations,
             )
             Spacer(Modifier.height(Space.s))
             BottomBar(dest) { dest = it }

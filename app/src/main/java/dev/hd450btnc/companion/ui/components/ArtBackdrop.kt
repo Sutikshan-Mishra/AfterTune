@@ -32,6 +32,8 @@ import kotlin.math.sin
  * it draws nothing, so the card stays pure black. A dark scrim keeps whatever is drawn above it readable.
  *
  * - Playing: scale/drift/brightness follow bass, mids and highs.
+ * - [ambient] (audio from another app, which cannot be analysed): the same picture drifts and breathes slowly
+ *   on its own clock while that app plays. It is motion, not a visualisation: it does not follow the sound.
  * - Paused: eases to a calm, still picture. It does not claim to be live.
  * - Reduced motion (animations off in system settings): still picture only.
  * - The frame loop runs only while playing or while settling, and stops by itself.
@@ -42,6 +44,7 @@ fun ArtBackdrop(
     levels: LevelAnalyzer?,
     playing: Boolean,
     modifier: Modifier = Modifier,
+    ambient: Boolean = false,
 ) {
     val context = LocalContext.current
     val reduced = remember {
@@ -63,27 +66,40 @@ fun ArtBackdrop(
     var treble by remember { mutableFloatStateOf(0f) }
     var phase by remember { mutableFloatStateOf(0f) }
 
-    val animate = ready != null && levels != null && !reduced
-    LaunchedEffect(animate, playing, ready) {
-        if (!animate || levels == null) {
+    LaunchedEffect(playing, ambient, ready, reduced) {
+        if (ready == null || reduced) {
             drive = 0f; bass = 0f; mids = 0f; treble = 0f
             return@LaunchedEffect
         }
         var last = 0L
+        var clock = 0f
         while (true) {
             val settled = withFrameNanos { now ->
                 val dt = if (last == 0L) 0.016f else ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
                 last = now
-                val tl = if (playing) levels.level else 0f
-                val tb = if (playing) levels.low else 0f
-                val tm = if (playing) levels.mid else 0f
-                val th = if (playing) levels.high else 0f
+                clock += dt
+                val tl: Float
+                val tb: Float
+                val tm: Float
+                val th: Float
+                if (playing && levels != null) {
+                    tl = levels.level; tb = levels.low; tm = levels.mid; th = levels.high
+                } else if (ambient) {
+                    // Slow, uneven breathing (periods of roughly 7 to 14 seconds); deliberately not tied to the audio.
+                    tl = 0.34f + 0.10f * sin(clock * 0.55f)
+                    tb = 0.30f + 0.22f * sin(clock * 0.70f + 1.1f)
+                    tm = 0.32f + 0.22f * sin(clock * 0.47f + 2.3f)
+                    th = 0.28f + 0.20f * sin(clock * 0.90f + 0.4f)
+                } else {
+                    tl = 0f; tb = 0f; tm = 0f; th = 0f
+                }
                 drive = LevelAnalyzer.smooth(drive, tl, dt)
                 bass = LevelAnalyzer.smooth(bass, tb, dt)
                 mids = LevelAnalyzer.smooth(mids, tm, dt)
                 treble = LevelAnalyzer.smooth(treble, th, dt)
                 phase += dt * (0.25f + 0.9f * drive)
-                !playing && drive < 0.004f && bass < 0.004f && mids < 0.004f && treble < 0.004f
+                !(playing && levels != null) && !ambient &&
+                    drive < 0.004f && bass < 0.004f && mids < 0.004f && treble < 0.004f
             }
             if (settled) break
         }

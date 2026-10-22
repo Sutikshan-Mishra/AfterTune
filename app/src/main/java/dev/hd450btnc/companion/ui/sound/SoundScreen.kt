@@ -78,6 +78,7 @@ fun SoundScreen(
     art: ArtworkState = ArtworkState.None,
     levels: LevelAnalyzer? = null,
     playing: Boolean = false,
+    ambientMotion: Boolean = false,
 ) {
     val c = Studio.colors
     var showSave by rememberSaveable { mutableStateOf(false) }
@@ -112,7 +113,7 @@ fun SoundScreen(
 
         GlassCard(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(Space.l),
-            backdrop = { ArtBackdrop(art, levels, playing, Modifier.matchParentSize()) },
+            backdrop = { ArtBackdrop(art, levels, playing, Modifier.matchParentSize(), ambient = ambientMotion) },
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -157,7 +158,7 @@ fun SoundScreen(
 
         AnimatedVisibility(visible = !eq.autoHeadroom && eq.enabled && peakDb > 0.0) {
             Notice(
-                "Auto headroom is off. Boosts up to +${"%.1f".format(peakDb)} dB can clip.",
+                "Headroom off. Boosts up to +${"%.1f".format(peakDb)} dB can clip.",
                 tone = Tone.WARNING,
                 glyph = GlyphKind.WARNING,
                 modifier = Modifier.padding(top = Space.m),

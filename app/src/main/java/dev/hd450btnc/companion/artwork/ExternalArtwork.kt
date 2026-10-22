@@ -11,11 +11,14 @@ import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,11 +44,16 @@ object ExternalArtworkRules {
         return firstEligible
     }
 
-    /** In-app art wins while the in-app player is playing (or when nothing external is available). */
-    fun preferInApp(inAppReady: Boolean, inAppPlaying: Boolean, externalReady: Boolean): Boolean = when {
-        !externalReady -> true
-        !inAppReady -> false
-        else -> inAppPlaying
+    /**
+     * Which source the UI follows. In-app wins while it plays (or when nothing external is available);
+     * with nothing in the in-app queue the external track is shown; with a paused in-app queue the external
+     * track is shown only if it is actually playing.
+     */
+    fun useExternal(inAppHasMedia: Boolean, inAppPlaying: Boolean, externalHasTrack: Boolean, externalPlaying: Boolean): Boolean = when {
+        !externalHasTrack -> false
+        !inAppHasMedia -> true
+        inAppPlaying -> false
+        else -> externalPlaying
     }
 
     /** What the toggle should be after returning from (or resuming without) the access screen. */
@@ -68,6 +76,17 @@ class ExternalArtworkController(private val context: Context, private val scope:
     private var running = false
     private var controllers: List<MediaController> = emptyList()
     private var shownKey: String? = null
+    private var current: MediaController? = null
+    private var lastTrack: ExternalTrack? = null
+    private var ticker: Job? = null
+    private val meter = ListenMeter(LISTEN_THRESHOLD_MS)
+
+    /** Called once per external track after it has really played for [LISTEN_THRESHOLD_MS]. */
+    var onListen: ((ExternalTrack) -> Unit)? = null
+
+    private val _track = MutableStateFlow<ExternalTrack?>(null)
+    /** Title, artist and progress of the followed external track, or null. */
+    val track: StateFlow<ExternalTrack?> = _track.asStateFlow()
 
     private val _state = MutableStateFlow<ArtworkState>(ArtworkState.None)
     val state: StateFlow<ArtworkState> = _state.asStateFlow()
@@ -94,6 +113,7 @@ class ExternalArtworkController(private val context: Context, private val scope:
         try {
             m.addOnActiveSessionsChangedListener(sessionsListener, component, main)
             running = true
+            startTicker()
             attach(m.getActiveSessions(component))
         } catch (e: SecurityException) {
             stop()
@@ -110,11 +130,91 @@ class ExternalArtworkController(private val context: Context, private val scope:
             }
         }
         running = false
+        ticker?.cancel()
+        ticker = null
         detach()
         session.begin()
         job?.cancel()
         shownKey = null
         _state.value = ArtworkState.None
+        publishTrack(null, null)
+    }
+
+    // ---- Controls: standard media-session transport commands sent to the followed app ----
+
+    fun togglePlay() {
+        val c = current ?: return
+        try {
+            if (c.playbackState?.state == PlaybackState.STATE_PLAYING) c.transportControls.pause() else c.transportControls.play()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun next() {
+        try {
+            current?.transportControls?.skipToNext()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun previous() {
+        try {
+            current?.transportControls?.skipToPrevious()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun startTicker() {
+        ticker?.cancel()
+        ticker = scope.launch {
+            while (isActive) {
+                delay(5_000)
+                val t = lastTrack ?: continue
+                if (meter.update(t.key, t.playing, SystemClock.elapsedRealtime())) onListen?.invoke(t)
+            }
+        }
+    }
+
+    /** Publishes the track and feeds the listen meter (flushing the previous track first when it changed). */
+    private fun publishTrack(controller: MediaController?, md: MediaMetadata?) {
+        val track = if (controller != null && md != null) buildTrack(controller, md) else null
+        current = if (track != null) controller else null
+        val now = SystemClock.elapsedRealtime()
+        val previous = lastTrack
+        if (previous != null && previous.key != track?.key) {
+            if (meter.update(previous.key, false, now)) onListen?.invoke(previous)
+        }
+        lastTrack = track
+        _track.value = track
+        if (meter.update(track?.key, track?.playing == true, now) && track != null) onListen?.invoke(track)
+    }
+
+    private fun buildTrack(controller: MediaController, md: MediaMetadata): ExternalTrack? {
+        val title = (md.getString(MediaMetadata.METADATA_KEY_TITLE) ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE))
+            ?.trim().orEmpty()
+        if (title.isEmpty()) return null
+        val artist = (
+            md.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                ?: md.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+                ?: md.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+            )?.trim().orEmpty()
+        val ps = controller.playbackState
+        val now = SystemClock.elapsedRealtime()
+        val duration = try {
+            md.getLong(MediaMetadata.METADATA_KEY_DURATION)
+        } catch (_: Exception) {
+            0L
+        }
+        return ExternalTrack(
+            packageName = controller.packageName,
+            title = title,
+            artist = artist,
+            durationMs = duration.coerceAtLeast(0L),
+            positionMs = ps?.position ?: PlaybackState.PLAYBACK_POSITION_UNKNOWN,
+            updatedAtMs = ps?.lastPositionUpdateTime?.takeIf { it > 0L } ?: now,
+            speed = ps?.playbackSpeed?.takeIf { it > 0f } ?: 1f,
+            playing = ps?.state == PlaybackState.STATE_PLAYING,
+        )
     }
 
     private fun detach() {
@@ -160,6 +260,7 @@ class ExternalArtworkController(private val context: Context, private val scope:
             clear()
             return
         }
+        publishTrack(controller, md) // title, artist and progress follow every state change
         // Apps often publish the title first and the picture a moment later: the picture's presence is part of the key.
         val key = trackKey(controller.packageName, md) + "|" + artSignature(md)
         if (key == shownKey) return // same track and picture: no flicker on play/pause
@@ -172,6 +273,7 @@ class ExternalArtworkController(private val context: Context, private val scope:
         job?.cancel()
         shownKey = null
         _state.value = ArtworkState.None
+        publishTrack(null, null)
     }
 
     private fun trackKey(pkg: String, md: MediaMetadata): String {
@@ -288,5 +390,6 @@ class ExternalArtworkController(private val context: Context, private val scope:
     private companion object {
         const val TARGET_PX = 40
         const val COVER_PX = 480
+        const val LISTEN_THRESHOLD_MS = 30_000L
     }
 }
