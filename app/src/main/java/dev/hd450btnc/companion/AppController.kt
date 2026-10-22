@@ -60,6 +60,9 @@ class AppController(private val app: Application) {
     val externalArtwork = ExternalArtworkController(app, scope)
     val systemEq = SystemEqController(app)
 
+    /** Whether the UI was following another app on the previous update (so a pause does not hand control back). */
+    private var followingExternal = false
+
     /**
      * What the UI follows: the in-app player, or another app's media session ([external]). For an external
      * source [track] carries its title, artist and progress; [state] is its picture (or none).
@@ -77,7 +80,9 @@ class AppController(private val app: Application) {
             inAppPlaying = inAppNow.second,
             externalHasTrack = track != null,
             externalPlaying = track?.playing == true,
+            followingExternal = followingExternal,
         )
+        followingExternal = useExternal
         if (useExternal) ShownArtwork(ext, true, track) else ShownArtwork(inApp, false)
     }.stateIn(scope, SharingStarted.Eagerly, ShownArtwork(ArtworkState.None, false))
 

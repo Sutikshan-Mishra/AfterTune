@@ -46,14 +46,21 @@ object ExternalArtworkRules {
 
     /**
      * Which source the UI follows. In-app wins while it plays (or when nothing external is available);
-     * with nothing in the in-app queue the external track is shown; with a paused in-app queue the external
-     * track is shown only if it is actually playing.
+     * with nothing in the in-app queue the external track is shown. With a paused in-app queue the external
+     * track is shown when it is playing, and it stays shown once followed ([followingExternal]) even while
+     * paused, so that pressing play resumes that app and not the in-app queue.
      */
-    fun useExternal(inAppHasMedia: Boolean, inAppPlaying: Boolean, externalHasTrack: Boolean, externalPlaying: Boolean): Boolean = when {
+    fun useExternal(
+        inAppHasMedia: Boolean,
+        inAppPlaying: Boolean,
+        externalHasTrack: Boolean,
+        externalPlaying: Boolean,
+        followingExternal: Boolean = false,
+    ): Boolean = when {
         !externalHasTrack -> false
         !inAppHasMedia -> true
         inAppPlaying -> false
-        else -> externalPlaying
+        else -> externalPlaying || followingExternal
     }
 
     /** What the toggle should be after returning from (or resuming without) the access screen. */

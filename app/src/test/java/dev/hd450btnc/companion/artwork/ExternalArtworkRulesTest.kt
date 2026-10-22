@@ -41,6 +41,16 @@ class ExternalArtworkRulesTest {
     }
 
     @Test
+    fun pausingTheFollowedAppDoesNotHandControlToTheInAppQueue() {
+        // in-app queue exists but is paused; the other app was being followed and is now paused
+        assertTrue(ExternalArtworkRules.useExternal(true, false, externalHasTrack = true, externalPlaying = false, followingExternal = true))
+        // in-app starting to play ends the following
+        assertFalse(ExternalArtworkRules.useExternal(true, true, externalHasTrack = true, externalPlaying = false, followingExternal = true))
+        // the other app's session going away ends the following
+        assertFalse(ExternalArtworkRules.useExternal(true, false, externalHasTrack = false, externalPlaying = false, followingExternal = true))
+    }
+
+    @Test
     fun accessDecidesTheToggle() {
         assertTrue(ExternalArtworkRules.reconcile(enabled = false, awaitingAccess = true, granted = true))
         assertFalse(ExternalArtworkRules.reconcile(enabled = false, awaitingAccess = true, granted = false))
