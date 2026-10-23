@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "dev.hd450btnc.companion"
+    namespace = "dev.aftertune"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.hd450btnc.companion"
+        applicationId = "dev.aftertune"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

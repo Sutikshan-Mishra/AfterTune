@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HD450BTNCCompanion"
+rootProject.name = "AfterTune"
 include(":app")
