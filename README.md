@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="docs/screenshots/banner.png" alt="AfterTune, a modern Android music player" width="100%">
+</p>
 # AfterTune
 
 A music player with a real equalizer, for Android.
